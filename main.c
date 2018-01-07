@@ -1,31 +1,25 @@
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <inttypes.h>
 #include <stdbool.h>
 
+#include <SDL2/SDL.h>
 
-void processInput(GLFWwindow *window);
-
-const unsigned int SCR_WIDTH = 448;
-const unsigned int SCR_HEIGHT = 512;
-
-const char *vertexShaderSource = "#version 330 core\n"
-    "layout (location = 0) in vec3 aPos;\n"
-    "void main()\n"
-    "{\n"
-    "   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
-    "}\0";
-const char *fragmentShaderSource = "#version 330 core\n"
-    "out vec4 FragColor;\n"
-    "void main()\n"
-    "{\n"
-    "   FragColor = vec4(0.0f, 0.8f, 0.0f, 1.0f);\n"
-    "}\n\0";
+#define WIDTH 224
+#define HEIGHT 256
 
 uint8_t *framebuffer;
+
+// I/O Ports
+uint8_t port[4];
+// 0000 000x = Coin
+// 0000 00x0 = P2 Start Button
+// 0000 0x00 = P1 Start Button
+// 0000 x000 = ?
+// 000x 0000 = P1 Shoot Button
+// 00x0 0000 = P1 Joystick Left
+// 0x00 0000 = P1 Joystick Right
+// x000 0000 = ?
 
 typedef struct Flags {
     uint8_t z:1; // Zero Flag
@@ -377,8 +371,6 @@ int Parity(uint16_t x)
 	return (0 == (p & 0x1));
 }
 
-
-
 void HandleFlags(ProcessorState *emulator, uint16_t result, bool carry){
     
     // Handle Zero
@@ -395,9 +387,22 @@ void HandleFlags(ProcessorState *emulator, uint16_t result, bool carry){
     // Handle Auxillary Carry
 }
 
+uint8_t LoadInputPort(uint8_t index) {
+    return port[index];
+}
+
 void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
     unsigned char *instruction = &memory[emulator->pc];
-
+    
+    if(*instruction == 0xdb) { // IN
+        emulator->a = LoadInputPort(instruction[1]);
+        emulator->pc += 1;
+    }
+    else if (*instruction == 0xd3) { // OUT
+        //OutputToPort(instruction[1]);
+        emulator->pc += 1;
+    }
+    
     switch (*instruction){
         case 0x00: // NOP 
             break;
@@ -826,8 +831,7 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
         case 0xd2: OpcodeNotWritten(&memory[pc]); break;
         case 0xd3: // OUT
         {
-            // output?!! skipping for now
-            emulator->pc += 1;
+            // Handled as an interupt at top.
             break;
         }
         case 0xd4: OpcodeNotWritten(&memory[pc]); break;
@@ -945,126 +949,53 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
     emulator->pc += 1;
 }
 
-uint8_t rotated[224][256]; // x, y
-
-void RotateBitMap(){
-
-        int y = 255;
-        for(int i=32; i >= 0; --i){
-            for(int bit=7; bit >=0; --bit){
-                int x = 0;
-            for(int j=0; j <= 224; ++j){
-                
+void OutputBitMap(SDL_Renderer *renderer){
+    int y = 0;
+    
+    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+    for(int i=32; i >= 0; --i) {
+        
+        for(int bit=7; bit >=0; --bit) {
+            int x = 0;
+            
+            for(int j=0; j <= 223; ++j) {
                 int index = i + (j * 32-1);
                 
-                if(framebuffer[index] & (1 << bit)){
-                    rotated[x][y] = 1;
-                    }
-                    else{
-                        rotated[x][y] = 0;
-                    }
-                    x++;
-            }
-            y--;
+                if(framebuffer[index] & (1 << bit)) {
+                    SDL_RenderDrawPoint(renderer, x, y);
+                }
+                
+                x++;
             }
             
+            y++;
         }
-}
-void Output(){
-    float points[50000];
-    int point_index = 0;
-    float point_x = -1.0f;
-    float point_y = 1.0f;
-    for(int y=255;y>=0;--y){
-        point_x = -1.0;
-        for(int x=0;x<224;++x){
-            if(rotated[x][y] == 1){
-                points[point_index] = point_x;
-                points[point_index+1] = point_y;
-                points[point_index+2] = 0.0f;
-                point_index+=3;
-            }
-            point_x+=0.009f;
-        }
-        point_y-=0.0075f;
     }
-    
-        // Setup glfw.
-    glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    // Create window.
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Space Invaders", NULL, NULL);
-    if (window == NULL)
-    {
-        printf("Failed to create GLFW window\n");
-        glfwTerminate();
-        return -1;
-    }
-    glfwMakeContextCurrent(window);
-    
-    // Connect opengl to glfw.
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-    {
-        printf("Failed to initalize glad\n");
-        return -1;
-    }
-    
-    int vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-    glCompileShader(vertexShader);
-
-    // fragment shader
-    int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-    glCompileShader(fragmentShader);
-
-    // link shaders
-    int shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
-    
-    // Clear memory.
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
-    
-    unsigned int VBO, VAO, EBO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glGenBuffers(1, &EBO);
-    // bind the Vertex Array Object first, then bind and set vertex buffer(s), and then configure vertex attributes(s).
-    glBindVertexArray(VAO);
-
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(points), points, GL_STATIC_DRAW);
-
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0); 
-
-    glBindVertexArray(0); 
-    
-    while(true){
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-        glUseProgram(shaderProgram);
-        glBindVertexArray(VAO);
-        glDrawArrays(GL_SQUARE,0,50000);
-        glfwSwapBuffers(window);
-        glfwPollEvents();
-    }
+    SDL_RenderPresent(renderer);
 }
 
+void GenerateInterrupt(ProcessorState* emulator, int interrupt_num)    
+   {    
+    //perform "PUSH PC"
+    emulator->memory[emulator->sp-2] = emulator->pc_hl[0];
+    emulator->memory[emulator->sp-1] = emulator->pc_hl[1];
 
-int main (int argc, char**argv) {
+    //Set the PC to the low memory vector.    
+    //This is identical to an "RST interrupt_num" instruction.    
+    emulator->pc = 8 * interrupt_num;    
+   }   
 
-    
-    // Create shader program.
-    // vertex shader
-    
+int main (int argc, char** argv) {
+    SDL_Event event;
+    SDL_Window *window;
+    SDL_Renderer *renderer;
+    SDL_Init(SDL_INIT_VIDEO);
+    SDL_CreateWindowAndRenderer(WIDTH, HEIGHT, 0, &window, &renderer);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+    SDL_RenderClear(renderer);
+    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+    SDL_RenderPresent(renderer);
+
     ProcessorState emulator = { 
         .a = 0, 
         .bc = 0, 
@@ -1081,18 +1012,89 @@ int main (int argc, char**argv) {
         };
         
     LoadRom(&emulator);
+    
     int count = 0;
     while(true){
+        if (SDL_PollEvent(&event)) {
+            if(event.type == SDL_QUIT) {
+                break;
+            }
+            if(event.type == SDL_KEYDOWN) {
+                switch( event.key.keysym.sym) {
+                    case SDLK_LEFT:
+                        printf("LEFT PRESSED\n");
+                        break;
+                    case SDLK_RIGHT:
+                        printf("RIGHT PRESSED\n");
+                        break;
+                    case SDLK_UP:
+                        printf("UP PRESSED\n");
+                        break;
+                    case SDLK_DOWN:
+                        printf("DOWN PRESSED\n");
+                        break;
+                    case SDLK_z:
+                        printf("FIRE PRESSED\n");
+                        break;
+                    case SDLK_1:
+                        port[1] |= 0x01;
+                        break;
+                    default:
+                        printf("Generic pressed\n");
+                        break;
+                }
+            }
+            if(event.type == SDL_KEYUP) {
+                switch( event.key.keysym.sym) {
+                    case SDLK_LEFT:
+                        printf("LEFT RELEASED\n");
+                        break;
+                    case SDLK_RIGHT:
+                        printf("RIGHT RELEASED\n");
+                        break;
+                    case SDLK_UP:
+                        printf("UP RELEASED\n");
+                        break;
+                    case SDLK_DOWN:
+                        printf("DOWN RELEASED\n");
+                        break;
+                    case SDLK_z:
+                        printf("FIRE RELEASED\n");
+                        break;
+                    case SDLK_1:
+                        port[1] &= ~0x01;
+                        break;
+                    default:
+                        printf("Generic released\n");
+                        break;
+                }
+            }
+        }
         
+        if (count % 10000 == 0)  //1/60 second has elapsed    
+        {    
+            //only do an interrupt if they are enabled    
+            if (emulator.int_enable)    
+            {    
+                GenerateInterrupt(&emulator, 2);    //interrupt 2      
+            }    
+        }   
+
+            
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+        SDL_RenderClear(renderer);
+
         ProcessOpcode(emulator.memory,emulator.pc, &emulator);
         count++;
         
-        if(count >= 45000 && (count % 100 == 0)){
-        RotateBitMap();
-        Output();
+        if(count >= 1000) {
+            OutputBitMap(renderer);
         }
         
     }
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
 
     
     return 0;    

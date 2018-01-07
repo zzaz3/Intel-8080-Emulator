@@ -3,20 +3,20 @@
 ## any manual changes will be erased      
 ##
 ## Debug
-ProjectName            :=8080_Emulator_C
+ProjectName            :=Intel8080Emulator
 ConfigurationName      :=Debug
-WorkspacePath          :=C:/Users/zzaz3/Documents/Homebrew
-ProjectPath            :=C:/Users/zzaz3/Documents/Homebrew/8080_Emulator_C
+WorkspacePath          :=/home/zach/Documents/Emulation
+ProjectPath            :=/home/zach/Documents/Emulation/Intel8080Emulator
 IntermediateDirectory  :=./Debug
 OutDir                 := $(IntermediateDirectory)
 CurrentFileName        :=
 CurrentFilePath        :=
 CurrentFileFullPath    :=
-User                   :=zzaz3
-Date                   :=20/10/2017
-CodeLitePath           :="C:/Program Files/CodeLite"
-LinkerName             :=C:/TDM-GCC-64/bin/g++.exe
-SharedObjectLinkerName :=C:/TDM-GCC-64/bin/g++.exe -shared -fPIC
+User                   :=zach
+Date                   :=01/07/18
+CodeLitePath           :=/home/zach/.codelite
+LinkerName             :=/usr/bin/g++
+SharedObjectLinkerName :=/usr/bin/g++ -shared -fPIC
 ObjectSuffix           :=.o
 DependSuffix           :=.o.d
 PreprocessSuffix       :=.i
@@ -32,37 +32,35 @@ Preprocessors          :=
 ObjectSwitch           :=-o 
 ArchiveOutputSwitch    := 
 PreprocessOnlySwitch   :=-E
-ObjectsFileList        :="8080_Emulator_C.txt"
+ObjectsFileList        :="Intel8080Emulator.txt"
 PCHCompileFlags        :=
-MakeDirCommand         :=makedir
-RcCmpOptions           := 
-RcCompilerName         :=C:/TDM-GCC-64/bin/windres.exe
+MakeDirCommand         :=mkdir -p
 LinkOptions            :=  
-IncludePath            :=  $(IncludeSwitch). $(IncludeSwitch). $(IncludeSwitch)C:\Users\zzaz3\Documents\Homebrew\8080_Emulator_C\include 
+IncludePath            :=  $(IncludeSwitch). $(IncludeSwitch). 
 IncludePCH             := 
 RcIncludePath          := 
-Libs                   := $(LibrarySwitch)glfw3 
-ArLibs                 :=  "glfw3" 
-LibPath                := $(LibraryPathSwitch). $(LibraryPathSwitch)C:\Users\zzaz3\Documents\Homebrew\testo\lib-mingw-w64 
+Libs                   := $(LibrarySwitch)SDL2 
+ArLibs                 :=  "SDL2" 
+LibPath                := $(LibraryPathSwitch). 
 
 ##
 ## Common variables
 ## AR, CXX, CC, AS, CXXFLAGS and CFLAGS can be overriden using an environment variables
 ##
-AR       := C:/TDM-GCC-64/bin/ar.exe rcu
-CXX      := C:/TDM-GCC-64/bin/g++.exe
-CC       := C:/TDM-GCC-64/bin/gcc.exe
+AR       := /usr/bin/ar rcu
+CXX      := /usr/bin/g++
+CC       := /usr/bin/gcc
 CXXFLAGS :=  -g -O0 -Wall $(Preprocessors)
 CFLAGS   :=  -g -O0 -Wall $(Preprocessors)
 ASFLAGS  := 
-AS       := C:/TDM-GCC-64/bin/as.exe
+AS       := /usr/bin/as
 
 
 ##
 ## User defined environment variables
 ##
-CodeLiteDir:=C:\Program Files\CodeLite
-Objects0=$(IntermediateDirectory)/main.c$(ObjectSuffix) $(IntermediateDirectory)/glad.c$(ObjectSuffix) 
+CodeLiteDir:=/usr/share/codelite
+Objects0=$(IntermediateDirectory)/main.c$(ObjectSuffix) 
 
 
 
@@ -81,11 +79,11 @@ $(OutputFile): $(IntermediateDirectory)/.d $(Objects)
 	$(LinkerName) $(OutputSwitch)$(OutputFile) @$(ObjectsFileList) $(LibPath) $(Libs) $(LinkOptions)
 
 MakeIntermediateDirs:
-	@$(MakeDirCommand) "./Debug"
+	@test -d ./Debug || $(MakeDirCommand) ./Debug
 
 
 $(IntermediateDirectory)/.d:
-	@$(MakeDirCommand) "./Debug"
+	@test -d ./Debug || $(MakeDirCommand) ./Debug
 
 PreBuild:
 
@@ -94,20 +92,12 @@ PreBuild:
 ## Objects
 ##
 $(IntermediateDirectory)/main.c$(ObjectSuffix): main.c $(IntermediateDirectory)/main.c$(DependSuffix)
-	$(CC) $(SourceSwitch) "C:/Users/zzaz3/Documents/Homebrew/8080_Emulator_C/main.c" $(CFLAGS) $(ObjectSwitch)$(IntermediateDirectory)/main.c$(ObjectSuffix) $(IncludePath)
+	$(CC) $(SourceSwitch) "/home/zach/Documents/Emulation/Intel8080Emulator/main.c" $(CFLAGS) $(ObjectSwitch)$(IntermediateDirectory)/main.c$(ObjectSuffix) $(IncludePath)
 $(IntermediateDirectory)/main.c$(DependSuffix): main.c
 	@$(CC) $(CFLAGS) $(IncludePath) -MG -MP -MT$(IntermediateDirectory)/main.c$(ObjectSuffix) -MF$(IntermediateDirectory)/main.c$(DependSuffix) -MM main.c
 
 $(IntermediateDirectory)/main.c$(PreprocessSuffix): main.c
 	$(CC) $(CFLAGS) $(IncludePath) $(PreprocessOnlySwitch) $(OutputSwitch) $(IntermediateDirectory)/main.c$(PreprocessSuffix) main.c
-
-$(IntermediateDirectory)/glad.c$(ObjectSuffix): glad.c $(IntermediateDirectory)/glad.c$(DependSuffix)
-	$(CC) $(SourceSwitch) "C:/Users/zzaz3/Documents/Homebrew/8080_Emulator_C/glad.c" $(CFLAGS) $(ObjectSwitch)$(IntermediateDirectory)/glad.c$(ObjectSuffix) $(IncludePath)
-$(IntermediateDirectory)/glad.c$(DependSuffix): glad.c
-	@$(CC) $(CFLAGS) $(IncludePath) -MG -MP -MT$(IntermediateDirectory)/glad.c$(ObjectSuffix) -MF$(IntermediateDirectory)/glad.c$(DependSuffix) -MM glad.c
-
-$(IntermediateDirectory)/glad.c$(PreprocessSuffix): glad.c
-	$(CC) $(CFLAGS) $(IncludePath) $(PreprocessOnlySwitch) $(OutputSwitch) $(IntermediateDirectory)/glad.c$(PreprocessSuffix) glad.c
 
 
 -include $(IntermediateDirectory)/*$(DependSuffix)
