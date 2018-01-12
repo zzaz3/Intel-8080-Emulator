@@ -5,18 +5,18 @@
 ## Debug
 ProjectName            :=Intel8080Emulator
 ConfigurationName      :=Debug
-WorkspacePath          :=/home/zach/Documents/Emulation
-ProjectPath            :=/home/zach/Documents/Emulation/Intel8080Emulator
+WorkspacePath          :=C:/Users/zzaz3/Documents/Homebrew
+ProjectPath            :=C:/Users/zzaz3/Documents/Intel-8080-Emulator
 IntermediateDirectory  :=./Debug
 OutDir                 := $(IntermediateDirectory)
 CurrentFileName        :=
 CurrentFilePath        :=
 CurrentFileFullPath    :=
-User                   :=zach
-Date                   :=01/07/18
-CodeLitePath           :=/home/zach/.codelite
-LinkerName             :=/usr/bin/g++
-SharedObjectLinkerName :=/usr/bin/g++ -shared -fPIC
+User                   :=zzaz3
+Date                   :=12/01/2018
+CodeLitePath           :="C:/Program Files/CodeLite"
+LinkerName             :=C:/TDM-GCC-64/bin/g++.exe
+SharedObjectLinkerName :=C:/TDM-GCC-64/bin/g++.exe -shared -fPIC
 ObjectSuffix           :=.o
 DependSuffix           :=.o.d
 PreprocessSuffix       :=.i
@@ -34,32 +34,34 @@ ArchiveOutputSwitch    :=
 PreprocessOnlySwitch   :=-E
 ObjectsFileList        :="Intel8080Emulator.txt"
 PCHCompileFlags        :=
-MakeDirCommand         :=mkdir -p
-LinkOptions            :=  
-IncludePath            :=  $(IncludeSwitch). $(IncludeSwitch). 
+MakeDirCommand         :=makedir
+RcCmpOptions           := 
+RcCompilerName         :=C:/TDM-GCC-64/bin/windres.exe
+LinkOptions            :=  -lmingw32 -lSDL2main -lSDL2
+IncludePath            :=  $(IncludeSwitch). $(IncludeSwitch)./include 
 IncludePCH             := 
 RcIncludePath          := 
 Libs                   := $(LibrarySwitch)SDL2 
 ArLibs                 :=  "SDL2" 
-LibPath                := $(LibraryPathSwitch). 
+LibPath                := $(LibraryPathSwitch). $(LibraryPathSwitch)./lib 
 
 ##
 ## Common variables
 ## AR, CXX, CC, AS, CXXFLAGS and CFLAGS can be overriden using an environment variables
 ##
-AR       := /usr/bin/ar rcu
-CXX      := /usr/bin/g++
-CC       := /usr/bin/gcc
+AR       := C:/TDM-GCC-64/bin/ar.exe rcu
+CXX      := C:/TDM-GCC-64/bin/g++.exe
+CC       := C:/TDM-GCC-64/bin/gcc.exe
 CXXFLAGS :=  -g -O0 -Wall $(Preprocessors)
 CFLAGS   :=  -g -O0 -Wall $(Preprocessors)
 ASFLAGS  := 
-AS       := /usr/bin/as
+AS       := C:/TDM-GCC-64/bin/as.exe
 
 
 ##
 ## User defined environment variables
 ##
-CodeLiteDir:=/usr/share/codelite
+CodeLiteDir:=C:\Program Files\CodeLite
 Objects0=$(IntermediateDirectory)/main.c$(ObjectSuffix) 
 
 
@@ -79,11 +81,11 @@ $(OutputFile): $(IntermediateDirectory)/.d $(Objects)
 	$(LinkerName) $(OutputSwitch)$(OutputFile) @$(ObjectsFileList) $(LibPath) $(Libs) $(LinkOptions)
 
 MakeIntermediateDirs:
-	@test -d ./Debug || $(MakeDirCommand) ./Debug
+	@$(MakeDirCommand) "./Debug"
 
 
 $(IntermediateDirectory)/.d:
-	@test -d ./Debug || $(MakeDirCommand) ./Debug
+	@$(MakeDirCommand) "./Debug"
 
 PreBuild:
 
@@ -92,7 +94,7 @@ PreBuild:
 ## Objects
 ##
 $(IntermediateDirectory)/main.c$(ObjectSuffix): main.c $(IntermediateDirectory)/main.c$(DependSuffix)
-	$(CC) $(SourceSwitch) "/home/zach/Documents/Emulation/Intel8080Emulator/main.c" $(CFLAGS) $(ObjectSwitch)$(IntermediateDirectory)/main.c$(ObjectSuffix) $(IncludePath)
+	$(CC) $(SourceSwitch) "C:/Users/zzaz3/Documents/Intel-8080-Emulator/main.c" $(CFLAGS) $(ObjectSwitch)$(IntermediateDirectory)/main.c$(ObjectSuffix) $(IncludePath)
 $(IntermediateDirectory)/main.c$(DependSuffix): main.c
 	@$(CC) $(CFLAGS) $(IncludePath) -MG -MP -MT$(IntermediateDirectory)/main.c$(ObjectSuffix) -MF$(IntermediateDirectory)/main.c$(DependSuffix) -MM main.c
 
