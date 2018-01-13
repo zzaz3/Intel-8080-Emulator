@@ -5,8 +5,8 @@
 ## Debug
 ProjectName            :=Intel8080Emulator
 ConfigurationName      :=Debug
-WorkspacePath          :=C:/Users/zzaz3/Documents/Homebrew
-ProjectPath            :=C:/Users/zzaz3/Documents/Intel-8080-Emulator
+WorkspacePath          :=C:/Users/zzaz3/Documents/homebrew
+ProjectPath            :=C:/Users/zzaz3/Intel-8080-Emulator
 IntermediateDirectory  :=./Debug
 OutDir                 := $(IntermediateDirectory)
 CurrentFileName        :=
@@ -94,7 +94,7 @@ PreBuild:
 ## Objects
 ##
 $(IntermediateDirectory)/main.c$(ObjectSuffix): main.c $(IntermediateDirectory)/main.c$(DependSuffix)
-	$(CC) $(SourceSwitch) "C:/Users/zzaz3/Documents/Intel-8080-Emulator/main.c" $(CFLAGS) $(ObjectSwitch)$(IntermediateDirectory)/main.c$(ObjectSuffix) $(IncludePath)
+	$(CC) $(SourceSwitch) "C:/Users/zzaz3/Intel-8080-Emulator/main.c" $(CFLAGS) $(ObjectSwitch)$(IntermediateDirectory)/main.c$(ObjectSuffix) $(IncludePath)
 $(IntermediateDirectory)/main.c$(DependSuffix): main.c
 	@$(CC) $(CFLAGS) $(IncludePath) -MG -MP -MT$(IntermediateDirectory)/main.c$(ObjectSuffix) -MF$(IntermediateDirectory)/main.c$(DependSuffix) -MM main.c
 

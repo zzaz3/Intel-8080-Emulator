@@ -3,11 +3,15 @@
 #include <inttypes.h>
 #include <stdbool.h>
 #include <pthread.h>
+#include <time.h>
+#include <math.h>
 
 #include <SDL2/SDL.h>
 
 #define WIDTH 224
 #define HEIGHT 256
+
+
 
 uint8_t *framebuffer;
 
@@ -714,7 +718,15 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
         case 0x7f: OpcodeNotWritten(&memory[pc]); break;
         case 0x80: OpcodeNotWritten(&memory[pc]); break;
         case 0x81: OpcodeNotWritten(&memory[pc]); break;
-        case 0x82: OpcodeNotWritten(&memory[pc]); break;
+        case 0x82: // ADD D
+        {
+            // not sure.
+            uint16_t result = emulator->a + emulator->de[1];
+            
+            // Handle AC.??
+            HandleFlags(emulator,result,true);
+            break;
+        }
         case 0x83: OpcodeNotWritten(&memory[pc]); break;
         case 0x84: OpcodeNotWritten(&memory[pc]); break;
         case 0x85: OpcodeNotWritten(&memory[pc]); break;
@@ -1013,17 +1025,28 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
     emulator->pc += 1;
 }
 
+      ProcessorState emulator = { 
+        .a = 0, 
+        .bc = 0, 
+        .de = 0, 
+        .hl = 0, 
+        .sp = 0xf000, 
+        .pc = 0, 
+        .flags.z = 0,
+        .flags.s = 0,
+        .flags.p = 0,
+        .flags.cy = 0,
+        .int_enable = 0
+        };
+
+
 SDL_Renderer *renderer;
 
-void *OutputBitMap(void *p){
-    printf("rendering?/n");
+void RenderTop() {    
     int y = 0;
     
     SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-    for(int i=32; i >= 0; --i) {
-        if( i == 16) {
-            SDL_RenderPresent(renderer);
-        }
+    for(int i=32; i > 16; --i) {
         for(int bit=7; bit >=0; --bit) {
             int x = 0;
             
@@ -1041,7 +1064,30 @@ void *OutputBitMap(void *p){
         }
     }
     SDL_RenderPresent(renderer);
-    //GenerateInterrupt(&emulator, 2);
+}
+
+void RenderBottom() {    
+    int y = HEIGHT/2;
+    
+    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+    for(int i=16; i >= 0; --i) {
+        for(int bit=7; bit >=0; --bit) {
+            int x = 0;
+            
+            for(int j=0; j <= 223; ++j) {
+                int index = i + (j * 32-1);
+                
+                if(framebuffer[index] & (1 << bit)) {
+                    SDL_RenderDrawPoint(renderer, x, y);
+                }
+                
+                x++;
+            }
+            
+            y++;
+        }
+    }
+    SDL_RenderPresent(renderer);
 }
 
 void GenerateInterrupt(ProcessorState* emulator, int interrupt_num)    
@@ -1053,7 +1099,31 @@ void GenerateInterrupt(ProcessorState* emulator, int interrupt_num)
     //Set the PC to the low memory vector.    
     //This is identical to an "RST interrupt_num" instruction.    
     emulator->pc = 8 * interrupt_num;    
-   }   
+}   
+
+
+void *OutputBitMap(void *p){
+    clock_t last_top = clock();
+    clock_t last_bottom = clock();
+    
+    while(true){
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+        SDL_RenderClear(renderer);
+
+        clock_t top = clock() - last_top;
+        double top_sec = (top * 1000 / CLOCKS_PER_SEC);
+        if(top_sec >= 16.6667) {
+            RenderTop();
+            GenerateInterrupt(&emulator,1);
+        }
+        clock_t bottom = clock() - last_bottom;
+        double bottom_sec = (bottom * 1000 / CLOCKS_PER_SEC);
+        if(bottom_sec >= 16.6667){
+            RenderBottom();
+            GenerateInterrupt(&emulator,2);
+        }
+    }
+}
 
 int main (int argc, char** argv) {
     SDL_Event event;
@@ -1066,24 +1136,12 @@ int main (int argc, char** argv) {
     SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
     SDL_RenderPresent(renderer);
     
-    ProcessorState emulator = { 
-        .a = 0, 
-        .bc = 0, 
-        .de = 0, 
-        .hl = 0, 
-        .sp = 0xf000, 
-        .pc = 0, 
-        .memory = malloc(0),
-        .flags.z = 0,
-        .flags.s = 0,
-        .flags.p = 0,
-        .flags.cy = 0,
-        .int_enable = 0
-        };
         
     LoadRom(&emulator);
     pthread_t tid;
+    pthread_create(&tid, NULL, OutputBitMap, &emulator);
     int count = 0;
+    clock_t start = clock();
     while(true){
         if (SDL_PollEvent(&event)) {
             if(event.type == SDL_QUIT) {
@@ -1140,20 +1198,11 @@ int main (int argc, char** argv) {
                 }
             }
         }
-            
-        //SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-        //SDL_RenderClear(renderer);
-
-        ProcessOpcode(emulator.memory,emulator.pc, &emulator);
-        count++;
-        if(count % 100 == 0){
-            int i=0;
-        }
-        if(count >= 65000) {
-            if (count % 100000 == 0) {
-            pthread_create(&tid, NULL, OutputBitMap, &renderer);
-            
-            }
+        
+        clock_t difference = clock() - start;
+        int seconds = (difference * 1000 / CLOCKS_PER_SEC) / 1000;
+        if(seconds % 1 == 0){
+                    ProcessOpcode(emulator.memory,emulator.pc, &emulator);
         }
         
     }
