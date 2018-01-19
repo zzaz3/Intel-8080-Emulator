@@ -101,7 +101,7 @@ void LoadRom(ProcessorState *emulator){
         // Go back to beginning of file.
         fseek(file_array[i], 0U, SEEK_SET);    
     }
-    emulator->memory = malloc(0x5000);
+    emulator->memory = malloc(0x4000);
     int pc = 0;
     for(int i=0; i < 4; ++i){
         fread(&emulator->memory[pc], 2, file_sizes[i]/2, file_array[i]);    
@@ -434,7 +434,7 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
     unsigned char *instruction = &memory[emulator->pc];
     
     
-    if(emulator->pc == 0x9c20) {
+    if(*instruction == 0xe2){
         int stop = 1;
     }
     
@@ -467,7 +467,13 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
             emulator->bc_pair += 1;
             break;
         }
-        case 0x04: OpcodeNotWritten(&memory[pc]); break;
+        case 0x04: // INR B
+        {
+            uint8_t result = emulator->bc[1] + 1;
+            HandleFlags(emulator, result, false, true);
+            emulator->bc[1] = result;
+            break;
+        }
         case 0x05: // DCR B
         {
             uint8_t result = emulator->bc[1] - 1;
@@ -481,12 +487,21 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
             emulator->pc += 1;
             break;
         }
-        case 0x07: OpcodeNotWritten(&memory[pc]); break;
+        case 0x07: // RLC
+        {
+            uint8_t result = emulator->a;
+            emulator->a = ((result & 0x80) >> 7) | (result << 1);
+            emulator->flags.cy = (0x80 == (result&0x80));
+            break;
+        }
         case 0x09: // DAD B
         {
-            uint32_t result = emulator->hl_pair + emulator->bc_pair;
-            HandleFlags(emulator, result, result>0xffff, false);
-            emulator->hl_pair = result;
+            uint32_t hl = (emulator->hl[1] << 8) | emulator->hl[0];
+			uint32_t bc = (emulator->bc[1] << 8) | emulator->bc[0];
+			uint32_t res = hl + bc;
+			emulator->hl[1] = (res & 0xff00) >> 8;
+			emulator->hl[0] = res & 0xff;
+			emulator->flags.cy = ((res & 0xffff0000) != 0);
             break;
         }
         case 0x0a: // LDAX B
@@ -525,6 +540,7 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
             emulator->de[0] = instruction[1];
             emulator->de[1] = instruction[2];
             emulator->pc += 2;
+            // Wrong instruction at 0xbea???
             break;
         }
         case 0x12: // STAX D
@@ -545,13 +561,21 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
             break;
         }
         case 0x15: OpcodeNotWritten(&memory[pc]); break;
-        case 0x16: OpcodeNotWritten(&memory[pc]); break;
+        case 0x16: // MVI D
+        {
+            emulator->de[1] = instruction[1];
+            emulator->pc += 1;
+            break;
+        }
         case 0x17: OpcodeNotWritten(&memory[pc]); break;
         case 0x19: // DAD D
         {
-            uint32_t result = emulator->hl_pair + emulator->de_pair;
-            emulator->flags.cy = result>0xfff ? 1 : 0;
-            emulator->hl_pair = result;
+			uint32_t hl = (emulator->hl[1] << 8) | emulator->hl[0];
+			uint32_t de = (emulator->de[1] << 8) | emulator->de[0];
+			uint32_t res = hl + de;
+			emulator->hl[1] = (res & 0xff00) >> 8;
+			emulator->hl[0] = res & 0xff;
+			emulator->flags.cy = ((res & 0xffff0000) != 0);
             break;
         }
         case 0x1a: // LDAX D
@@ -564,7 +588,13 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
         case 0x1c: OpcodeNotWritten(&memory[pc]); break;
         case 0x1d: OpcodeNotWritten(&memory[pc]); break;
         case 0x1e: OpcodeNotWritten(&memory[pc]); break;
-        case 0x1f: OpcodeNotWritten(&memory[pc]); break;
+        case 0x1f: // RAR
+        {
+            uint8_t result = emulator->a;
+            emulator->a = ((emulator->flags.cy) << 7) | (result >> 1);
+            emulator->flags.cy = (1 == (result&1));
+            break;
+        }
         case 0x20: OpcodeNotWritten(&memory[pc]); break;
         case 0x21: // LXI H
         {
@@ -586,7 +616,14 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
             emulator->hl_pair += 1;
             break;
         }
-        case 0x24: OpcodeNotWritten(&memory[pc]); break;
+        case 0x24: // INR H
+        {
+            uint8_t result = emulator->hl[1] + 1;
+            emulator->hl[1] = result;
+            
+            HandleFlags(emulator,result,false,true);
+            break;
+        }
         case 0x25: OpcodeNotWritten(&memory[pc]); break;
         case 0x26: // MVI H
         {
@@ -594,19 +631,48 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
             emulator->pc += 1;
             break;
         }
-        case 0x27: OpcodeNotWritten(&memory[pc]); break;
-        case 0x29: // DAD H
+        case 0x27: // DAA
         {
-            uint32_t result = emulator->hl_pair + emulator->hl_pair;
-            emulator->flags.cy = result>0xfff ? 1 : 0;
-            emulator->hl_pair = result;
+            if ((emulator->a &0xf) > 9)
+                emulator->a += 6;
+            if ((emulator->a&0xf0) > 0x90)
+            {
+                uint16_t res = (uint16_t) emulator->a + 0x60;
+                emulator->a = res & 0xff;
+                HandleFlags(emulator,res,res>0xff,true);
+            }
             break;
         }
-        case 0x2a: OpcodeNotWritten(&memory[pc]); break;
-        case 0x2b: OpcodeNotWritten(&memory[pc]); break;
+        case 0x29: // DAD H
+        {
+			uint32_t hl = (emulator->hl[1] << 8) | emulator->hl[0];
+			uint32_t res = hl + hl;
+			emulator->hl[1] = (res & 0xff00) >> 8;
+			emulator->hl[0] = res & 0xff;
+			emulator->flags.cy = ((res & 0xffff0000) != 0);
+            break;
+        }
+        case 0x2a: // LHLD
+        {
+            emulator->seperate[0] = instruction[1];
+            emulator->seperate[1] = instruction[2];
+            emulator->hl[0] = emulator->memory[emulator->combined];
+            emulator->hl[1] = emulator->memory[emulator->combined+1];
+            emulator->pc += 2;
+            break;
+        }
+        case 0x2b: // DCX H
+        {
+            emulator->hl_pair = emulator->hl_pair -1;
+            break;
+        }
         case 0x2c: OpcodeNotWritten(&memory[pc]); break;
         case 0x2d: OpcodeNotWritten(&memory[pc]); break;
-        case 0x2e: OpcodeNotWritten(&memory[pc]); break;
+        case 0x2e: // MVI L
+        {
+            emulator->hl[0] = instruction[1];
+            break;
+        }
         case 0x2f: OpcodeNotWritten(&memory[pc]); break;
         case 0x30: OpcodeNotWritten(&memory[pc]); break;
         case 0x31: // LXI SP
@@ -646,10 +712,11 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
         }
         case 0x39: // DAD SP
         {
-            uint16_t result = emulator->hl_pair + emulator->sp;
-            emulator->hl_pair = result;
-            
-            HandleFlags(emulator,result,true,false);
+            uint32_t hl = (emulator->hl[1] << 8) | emulator->hl[0];
+			uint32_t res = hl + emulator->sp;
+			emulator->hl[1] = (res & 0xff00) >> 8;
+			emulator->hl[0] = res & 0xff;
+			emulator->flags.cy = ((res & 0xffff0000) != 0);
             break;
         }
         case 0x3a: // LDA
@@ -816,7 +883,11 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
             emulator->hl[0] = emulator->a;
             break;
         }
-        case 0x70: OpcodeNotWritten(&memory[pc]); break;
+        case 0x70: // MOV M,B
+        {
+            emulator->memory[emulator->hl_pair] = emulator->bc[1];
+            break;
+        }
         case 0x71: OpcodeNotWritten(&memory[pc]); break;
         case 0x72: OpcodeNotWritten(&memory[pc]); break;
         case 0x73: OpcodeNotWritten(&memory[pc]); break;
@@ -868,7 +939,15 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
             emulator->a = emulator->a;
             break;
         }
-        case 0x80: OpcodeNotWritten(&memory[pc]); break;
+        case 0x80: // ADD B
+        {
+            uint16_t result = emulator->a + emulator->bc[1];
+
+            emulator->a = result & 0xff;
+            
+            HandleFlags(emulator,result,result>0xff, true);
+            break;
+        }
         case 0x81: OpcodeNotWritten(&memory[pc]); break;
         case 0x82: // ADD D
         {
@@ -919,7 +998,7 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
         {
             uint16_t result = emulator->a & emulator->a;
             HandleFlags(emulator,result, result>0xff, true);
-            emulator->a = result;
+            emulator->a = result & 0xff;
             break;
         }
         case 0xa8: OpcodeNotWritten(&memory[pc]); break;
@@ -933,7 +1012,7 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
         {
             uint16_t result = emulator->a ^ emulator->a;
             HandleFlags(emulator,result, result>0xff, true);
-            emulator->a = result;
+            emulator->a = result && 0xff;
             break;
         }
         case 0xb0: // ORA B
@@ -948,7 +1027,13 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
         case 0xb3: OpcodeNotWritten(&memory[pc]); break;
         case 0xb4: OpcodeNotWritten(&memory[pc]); break;
         case 0xb5: OpcodeNotWritten(&memory[pc]); break;
-        case 0xb6: OpcodeNotWritten(&memory[pc]); break;
+        case 0xb6: // ORA M
+        {
+            uint16_t result = emulator->a | emulator->memory[emulator->hl_pair];
+            HandleFlags(emulator,result, result>0xff, true);
+            emulator->a = result;
+            break;
+        }
         case 0xb7: OpcodeNotWritten(&memory[pc]); break;
         case 0xb8: OpcodeNotWritten(&memory[pc]); break;
         case 0xb9: OpcodeNotWritten(&memory[pc]); break;
@@ -978,7 +1063,7 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
         {
             emulator->seperate[0] = instruction[1];
             emulator->seperate[1] = instruction[2];
-            emulator->pc = emulator->flags.z ? emulator->pc+2 : emulator->combined-1;
+            emulator->pc = (emulator->flags.z) ? emulator->pc+2 : emulator->combined-1;
             break;
         }
         case 0xc3: // JMP
@@ -988,7 +1073,21 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
             emulator->pc = emulator->combined - 1;
             break;
         }
-        case 0xc4: OpcodeNotWritten(&memory[pc]); break;
+        case 0xc4: // CNZ
+        {
+            if(emulator->flags.z == false){
+                emulator->memory[emulator->sp-1] = emulator->pc_hl[1];
+                emulator->memory[emulator->sp-2] = emulator->pc_hl[0]+2;
+                emulator->sp -= 2;
+                emulator->seperate[0] = instruction[1];
+                emulator->seperate[1] = instruction[2];
+                emulator->pc = emulator->combined - 1;
+            }
+            else {
+                emulator->pc += 2;
+            }
+            break;
+        }
         case 0xc5: // PUSH B
         {
             emulator->memory[emulator->sp-2] = emulator->bc[0];
@@ -998,9 +1097,9 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
         }
         case 0xc6: // ADI D8
         {
-            uint16_t result = emulator->a + instruction[1];
+            uint16_t result = (uint16_t)emulator->a + (uint16_t)instruction[1];
             HandleFlags(emulator,result, result>0xff, true);
-            emulator->a = result;
+            emulator->a = result & 0xff;
             emulator->pc += 1;
             break;
         }
@@ -1034,7 +1133,21 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
             }
             break;
         }
-        case 0xcc: OpcodeNotWritten(&memory[pc]); break;
+        case 0xcc: // CZ
+        {
+            if(emulator->flags.z == true){
+                emulator->memory[emulator->sp-1] = emulator->pc_hl[1];
+                emulator->memory[emulator->sp-2] = emulator->pc_hl[0]+2;
+                emulator->sp -= 2;
+                emulator->seperate[0] = instruction[1];
+                emulator->seperate[1] = instruction[2];
+                emulator->pc = emulator->combined - 1;
+            }
+            else {
+                emulator->pc += 2;
+            }
+            break;
+        }
         case 0xcd: // CALL
         {
             // No idea why this works, but it does.
@@ -1076,7 +1189,21 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
             // Handled as an interupt at top.
             break;
         }
-        case 0xd4: OpcodeNotWritten(&memory[pc]); break;
+        case 0xd4: // CNC
+        {
+            if(emulator->flags.cy == false){
+                emulator->memory[emulator->sp-1] = emulator->pc_hl[1];
+                emulator->memory[emulator->sp-2] = emulator->pc_hl[0]+2;
+                emulator->sp -= 2;
+                emulator->seperate[0] = instruction[1];
+                emulator->seperate[1] = instruction[2];
+                emulator->pc = emulator->combined - 1;
+            }
+            else {
+                emulator->pc += 2;
+            }
+            break;
+        }
         case 0xd5: // PUSH D
         {
             emulator->memory[emulator->sp-2] = emulator->de[0];
@@ -1181,15 +1308,14 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
         }
         case 0xec: // CPE adr
         {
-            emulator->seperate[0] = instruction[1];
-            emulator->seperate[1] = instruction[2];
-            
-            if(emulator->flags.p) {
-                emulator->memory[emulator->sp-2] = emulator->pc_hl[0];
+            if(emulator->flags.p == true) {
+                // No idea why this works, but it does.
                 emulator->memory[emulator->sp-1] = emulator->pc_hl[1];
-                emulator->sp -=2;
-                
-                emulator->pc = emulator->combined-1;
+                emulator->memory[emulator->sp-2] = emulator->pc_hl[0]+2;
+                emulator->sp -= 2;
+                emulator->seperate[0] = instruction[1];
+                emulator->seperate[1] = instruction[2];
+                emulator->pc = emulator->combined - 1;
             }
             else {
                 emulator->pc +=2;
@@ -1200,7 +1326,7 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
         case 0xef: OpcodeNotWritten(&memory[pc]); break;
         case 0xf0: // RP
         {
-            if(emulator->flags.p == false) {
+            if(emulator->flags.s == false) {
                 emulator->pc_hl[0] = emulator->memory[emulator->sp];
                 emulator->pc_hl[1] = emulator->memory[emulator->sp+1];
                 emulator->sp += 2;
@@ -1241,11 +1367,29 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
             emulator->sp -= 2;
             break;
         }
-        case 0xf6: OpcodeNotWritten(&memory[pc]); break;
+        case 0xf6: // ORI
+        {
+            uint16_t result = emulator->a | instruction[1];
+            emulator->a = result;
+            HandleFlags(emulator,result, result>0xff, true);
+            emulator->flags.cy = false;
+            emulator->pc += 1;
+            break;
+        }
         case 0xf7: OpcodeNotWritten(&memory[pc]); break;
         case 0xf8: OpcodeNotWritten(&memory[pc]); break;
         case 0xf9: OpcodeNotWritten(&memory[pc]); break;
-        case 0xfa: OpcodeNotWritten(&memory[pc]); break;
+        case 0xfa: // JM
+        {
+            if(emulator->flags.s == true) {
+                emulator->seperate[0] = instruction[1];
+                emulator->seperate[1] = instruction[2];
+                emulator->pc = emulator->combined - 1;
+            } else {
+                emulator->pc += 2;
+            }
+            break;
+        }
         case 0xfb: // EI
         {
             emulator->int_enable = true;
@@ -1268,11 +1412,23 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
         default: (OpcodeNotWritten(&memory[pc]));
     }
     
+    if(emulator->pc == 0x204b){
+        int stop = 1;
+    }
+    
+    if(emulator->sp == 0xfffe){
+        int stop = 1;
+    }
+    
+    if(emulator->pc == 0x1439) {
+        int stop = 1;
+    }
+    
     if(emulator->hl_pair == 0xff9d){
         int stop = 1;
     }
     
-    if(emulator->pc == 0x9c20) {
+    if(instruction[0] == 0x9e) {
         int stop = 1;
     }
     
@@ -1288,7 +1444,7 @@ void ProcessOpcode(unsigned char *memory, int pc, ProcessorState *emulator){
         .bc = 0, 
         .de = 0, 
         .hl = 0, 
-        .sp = 0xf000, 
+        .sp = 0x2400, 
         .pc = 0, 
         .flags.z = 0,
         .flags.s = 0,
@@ -1350,12 +1506,13 @@ void RenderBottom() {
 
 void GenerateInterrupt(ProcessorState* emulator, int interrupt_num)    
    {
-    int_waiting = true;
-    while(int_waiting == true){
-        
+       if(emulator->sp == 0xfffe){
+        int stop = 1;
     }
     //perform "PUSH PC"
-    emulator->memory[emulator->sp-2] = emulator->pc_hl[0];
+    //printf("%#08x\n", emulator->sp);
+    
+    emulator->memory[emulator->sp-2] = emulator->pc_hl[0]-1;
     emulator->memory[emulator->sp-1] = emulator->pc_hl[1];
     emulator->sp -=2;
     
@@ -1363,6 +1520,9 @@ void GenerateInterrupt(ProcessorState* emulator, int interrupt_num)
     //This is identical to an "RST interrupt_num" instruction.    
     emulator->pc = 8 * interrupt_num;
     
+    if(emulator->pc == 0x204b){
+        int stop = 1;
+    }
     emulator->int_enable = false;
 }   
 
@@ -1375,26 +1535,14 @@ void *OutputBitMap(void *p){
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
         SDL_RenderClear(renderer);
         
-        clock_t top = clock() - last_top;
-        float top_sec = (top * 1000 / CLOCKS_PER_SEC);
-            if(top_sec >= 16.6667) {
-                RenderTop();
-                GenerateInterrupt(&emulator,1);
-                last_top = clock();
-            }
-        clock_t bottom = clock() - last_bottom;
-        float bottom_sec = (bottom * 1000 / CLOCKS_PER_SEC);
-            if(bottom_sec >= 16.6667){
-                RenderBottom();
-                //GenerateInterrupt(&emulator,2);
-                last_bottom = clock();
-            }
+        RenderTop();
+        RenderBottom();
     }
  }
 
 int main (int argc, char** argv) {
     port[0] = 0x0D;
-    port[1] = 0x09;
+    port[1] = 0x08;
     port[2] = 0x0C;
     //port[3] = 
     emulator.int_enable = true;
@@ -1409,6 +1557,7 @@ int main (int argc, char** argv) {
     SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
     SDL_RenderPresent(renderer);
     
+    int interrupt = 1;
     int count = 0;
     LoadRom(&emulator);
     pthread_t tid;
@@ -1435,6 +1584,9 @@ int main (int argc, char** argv) {
                     case SDLK_z:
                         printf("FIRE PRESSED\n");
                         break;
+                    case SDLK_2:
+                        port[1] |= 0x04;
+                        break;
                     case SDLK_1:
                         port[1] |= 0x01;
                         break;
@@ -1460,8 +1612,11 @@ int main (int argc, char** argv) {
                     case SDLK_z:
                         printf("FIRE RELEASED\n");
                         break;
+                    case SDLK_2:
+                        port[1] &= ~0x04;
+                        break;
                     case SDLK_1:
-                        //port[1] &= ~0x01;
+                        port[1] &= ~0x01;
                         break;
                     default:
                         printf("Generic released\n");
@@ -1474,16 +1629,23 @@ int main (int argc, char** argv) {
             pthread_create(&tid, NULL, OutputBitMap, &emulator);
         }
         
-        clock_t difference = clock() - start;
-        int seconds = (difference * 1000 / CLOCKS_PER_SEC) / 1000;
-        if(int_waiting == false && seconds % 1 == 0){
+        if(count >= 5000000 && count % 1000000 == 0) {
+            if(interrupt == 1) {
+                GenerateInterrupt(&emulator,1);
+                interrupt++;
+            }
+            else if(interrupt == 2){
+                GenerateInterrupt(&emulator,2);
+                interrupt--;
+            }
+        }
+        if(count >= 500000 && count % 1000 == 0) {
             ProcessOpcode(emulator.memory,emulator.pc, &emulator);
         }
-        else {
-            int_waiting = false;
-            usleep(100);
 
-        }
+            
+            //start = clock();
+        
     }
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
